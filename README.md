@@ -1,4 +1,4 @@
-# owa_enum
+# Enum OWA
 Try to enumerate valid usernames on an **OWA**.
 
 ## Usage
