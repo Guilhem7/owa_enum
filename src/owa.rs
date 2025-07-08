@@ -89,7 +89,6 @@ impl Owa {
                 if e.is_timeout(){
                     return OwaResult::UserNotFound;
                 } else if e.is_redirect(){
-                    log!("Got {:?}", e);
                     return OwaResult::UserExists;
                 } else {
                     log!("Got {:?}", e);

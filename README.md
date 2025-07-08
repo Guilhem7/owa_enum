@@ -1,5 +1,5 @@
 # Enum OWA
-Try to enumerate valid usernames on an **OWA**.
+Try to enumerate valid usernames on an **OWA** with **Forms-based**.
 
 ## Usage
 ```sh
