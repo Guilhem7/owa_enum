@@ -99,12 +99,13 @@ fn main() {
                 owa::OwaResult::PasswordValid => {
                     msg!("User {}:{} is valid", Color::wrap(&username, Color::CYAN), Color::wrap(args.password.as_ref(), Color::CYAN));
                     let mut buf = buffer.lock().unwrap();
-                    buf.push_str(&format!("{}:{}", username, args.password));
+                    buf.push_str(&format!("{}:{}\n", username, args.password));
                 }
                 owa::OwaResult::UserExists => {
                     msg!("User {} exists", Color::wrap(&username, Color::CYAN));
                     let mut buf = buffer.lock().unwrap();
                     buf.push_str(&username);
+                    buf.push('\n');
                 }
                 owa::OwaResult::UserNotFound => err!("User {} does not exists", Color::wrap(&username, Color::BOLD)),
             }

@@ -32,5 +32,5 @@ Options:
   -o, --output <OUTPUT>
           Output valid users to a file
   -h, --help
-          Print help
+          Print helps
 ```
