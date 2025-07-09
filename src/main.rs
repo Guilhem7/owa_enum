@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, Write};
 use std::sync::{Arc, Mutex};
 use owa_enum::{Color, err, log, msg};
-use owa::Owa;
+use crate::owa::utils;
 use reqwest::blocking::{Client};
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;
@@ -56,12 +56,11 @@ fn main() {
                 .num_threads(args.threads_number)
                 .build()
                 .expect("Failed to build thread pool");
+
     msg!("Using {} threads", Color::wrap(args.threads_number.to_string().as_str(), Color::YELLOW));
 
     let mut target = args.target;
-    let user = &args.user;
-
-    let mut users: Vec<String> = vec![(&user).to_string()];
+    let mut users: Vec<String> = vec![(&args.user).to_string()];
 
     if !target.starts_with("http") {
         target = format!("https://{}", target);
@@ -69,7 +68,7 @@ fn main() {
 
     msg!("Attacking {}", Color::wrap(&target, Color::BOLD));
 
-    if let Ok(user_list) = get_users(user) {
+    if let Ok(user_list) = get_users(&users[0]) {
         users = user_list;
         msg!("Checking on {} users", users.len());
     } else {
@@ -81,11 +80,20 @@ fn main() {
                                   .redirect(reqwest::redirect::Policy::none())
                                   .build().expect("Help, cannot create a HTTP Client");
 
-    let mut owa_enumerator = owa::Owa::new(client, target, args.domain);
+    let mut owa_enumerator = owa::utils::Owa::new(client, target, args.domain);
+    let owa_auth: owa::utils::OwaAuthMethod = owa_enumerator.get_auth_method();
+
+    if owa_auth == owa::utils::OwaAuthMethod::Unknown {
+        err!("Unknown auth mode, are you sure the target is an OWA");
+        return ();
+    } else if owa_auth != owa::utils::OwaAuthMethod::Form {
+        err!("Auth {} not supported", owa_auth);
+        return ();
+    }
+    log!("Auth method in use: {}", Color::wrap(&owa_auth.to_string(), Color::YELLOW));
+
     match owa_enumerator.get_domain_name(){
-        Ok(()) => {
-            msg!("Domain name {}", Color::wrap(&owa_enumerator.get_domain(), Color::CYAN));
-        }
+        Ok(()) => msg!("Domain name {}", Color::wrap(&owa_enumerator.get_domain(), Color::CYAN)),
         Err(e) => {
             err!("Got {}", e);
             return ();
@@ -96,18 +104,18 @@ fn main() {
     pool.install(|| {
         users.par_iter().for_each( |username| {
             match owa_enumerator.user_exists(&username, args.password.as_ref()) {
-                owa::OwaResult::PasswordValid => {
+                owa::utils::OwaResult::PasswordValid => {
                     msg!("User {}:{} is valid", Color::wrap(&username, Color::CYAN), Color::wrap(args.password.as_ref(), Color::CYAN));
                     let mut buf = buffer.lock().unwrap();
                     buf.push_str(&format!("{}:{}\n", username, args.password));
                 }
-                owa::OwaResult::UserExists => {
+                owa::utils::OwaResult::UserExists => {
                     msg!("User {} exists", Color::wrap(&username, Color::CYAN));
                     let mut buf = buffer.lock().unwrap();
                     buf.push_str(&username);
                     buf.push('\n');
                 }
-                owa::OwaResult::UserNotFound => err!("User {} does not exists", Color::wrap(&username, Color::BOLD)),
+                owa::utils::OwaResult::UserNotFound => err!("User {} does not exists", Color::wrap(&username, Color::BOLD)),
             }
         })
     });
