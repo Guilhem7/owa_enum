@@ -1,13 +1,21 @@
 # Enum OWA
 Try to enumerate valid usernames on an **OWA** with **Forms-based**.
 
+## Install
+```sh
+# Build the project
+# If using mise: mise use -g rust@latest
+cargo build --release
+./target/release/owa_enum -h
+```
+
 ## Usage
 ```sh
-# Test to check valid users from file users.txt
-cargo run -- --target test.contoso.fr --user users.txt
+# Test to check valid a single valid user
+cargo run -- --target THE-EYRIE.sevenkingdoms.local --user lysa.arryn
 
 # Test multiple users and write output to a file
-cargo run -- --target test.contoso.fr --user users.txt --domain TEST.CONTOSO.LOCAL --output valid_users.txt --password 'test123!'
+cargo run -- --target THE-EYRIE.sevenkingdoms.local --user users.txt --domain SEVENKINGDOMS --output valid_users.txt --password 'test123!'
 
 ```
 
