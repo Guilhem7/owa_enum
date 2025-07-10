@@ -71,6 +71,7 @@ impl Owa {
                     for authenticate in res.headers().get_all("WWW-Authenticate").iter() {
                         let authenticate_val = authenticate.to_str().unwrap_or("");
                         if authenticate_val.contains("NTLM") { return OwaAuthMethod::Ntlm; }
+                        if authenticate_val.contains("Basic") { return OwaAuthMethod::Basic; }
                     }
                     return OwaAuthMethod::Unknown;
                 } else {
@@ -148,7 +149,7 @@ impl Owa {
                         return Ok(endpoint);
                     }
                 }
-                Err(e) => {}
+                Err(_) => {}
             }
         }
         Err("No endpoint found")

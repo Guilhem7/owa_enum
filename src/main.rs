@@ -1,11 +1,9 @@
-#![allow(dead_code, unused_variables, unused_imports)]
 mod owa;
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Write};
 use std::sync::{Arc, Mutex};
 use owa_enum::{Color, err, log, msg};
-use crate::owa::utils;
 use reqwest::blocking::{Client};
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;
