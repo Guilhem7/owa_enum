@@ -43,7 +43,7 @@ macro_rules! err {
 macro_rules! log {
     ( $( $x:tt )* ) => {
         {
-            println!("{} {}", Color::wrap("[-]", &format!("{}{}", Color::BOLD, Color::YELLOW)), format!($($x)*));
+            println!("{} {}", Color::wrap("[*]", &format!("{}{}", Color::BOLD, Color::YELLOW)), format!($($x)*));
         }
     };
 }

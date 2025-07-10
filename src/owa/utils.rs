@@ -2,6 +2,7 @@ use reqwest::blocking::{Client};
 use reqwest::header;
 use std::fmt;
 use std::error::Error;
+use std::time::{Duration, Instant};
 use owa_enum::{Color, err, log, msg};
 use super::ntlm::NTLM;
 
@@ -13,6 +14,8 @@ const OWA_ENDPOINTS: [&str; 5] = ["/ews",
 
 const OWA_BASE: &str = "/owa/";
 const OWA_LOGIN: &str = concat!("/owa", "/auth.owa");
+
+const NON_EXISTING_USER: &str = "IWillN3v3rEx1stInAD0ma!nIth1nk";
 
 #[derive(Debug)]
 pub enum OwaResult {
@@ -52,6 +55,10 @@ impl Owa {
         }
     }
 
+    pub fn set_client(&mut self, client: Client) {
+        self.http_client = client;
+    }
+
     pub fn get_auth_method(&self) -> OwaAuthMethod {
         match self.http_client.get(format!("{}{}", &self.uri, OWA_BASE)).send() {
             Ok(res) => {
@@ -81,37 +88,52 @@ impl Owa {
         self.domain.clone()
     }
 
-    pub fn user_exists(&self, user: &str, password: &str) -> OwaResult {
-        let login_data = [
-                          ("destination", format!("{}{}", self.uri, "/owa")),
-                          ("flags", "4".to_string()),
-                          ("forcedownlevel", "0".to_string()),
-                          ("username", format!("{}\\{}", self.domain, user)),
-                          ("password", password.to_string()),
-                          ("passwordText", "".to_string()),
-                          ("isUtf8", "1".to_string())
-                         ];
+    pub fn get_login_data(&self, user: &str, password: &str) -> [(&str, String); 7] {
+        [
+          ("destination", format!("{}{}", self.uri, "/owa")),
+          ("flags", "4".to_string()),
+          ("forcedownlevel", "0".to_string()),
+          ("username", format!("{}\\{}", self.domain, user)),
+          ("password", password.to_string()),
+          ("passwordText", "".to_string()),
+          ("isUtf8", "1".to_string())
+         ]
+    }
 
+    pub fn get_timeout_owa(&self) -> Duration {
+        let instant = Instant::now();
+        let _ = self.http_client.post(format!("{}{}", self.uri, OWA_LOGIN))
+                                .form(&(self.get_login_data(NON_EXISTING_USER, "n0t_in_u$!sA123e")))
+                                .send();
+        instant.elapsed()
+    }
+
+    pub fn user_exists(&self, user: &str, password: &str) -> (OwaResult, Duration) {
+        let login_data = self.get_login_data(user, password);
+
+        let instant = Instant::now();
         match self.http_client.post(format!("{}{}", self.uri, OWA_LOGIN))
                               .form(&login_data)
                               .send()
         {
             Ok(res) => {
+                let elapsed_time = instant.elapsed();
                 if let Some(location) = res.headers().get("Location") {
                     let location_str = location.to_str().unwrap_or("");
                     if location_str.contains("/auth/logon.aspx") &&
                        location_str.contains("reason=") {
-                        return OwaResult::UserExists
+                        return (OwaResult::UserExists, elapsed_time);
                     }
                 }
-                return OwaResult::PasswordValid;
+                return (OwaResult::PasswordValid, elapsed_time);
             }
             Err(e) => {
+                let elapsed_time = instant.elapsed();
                 if e.is_timeout(){
-                    return OwaResult::UserNotFound;
+                    return (OwaResult::UserNotFound, elapsed_time);
                 } else {
                     log!("Got {:?}", e);
-                    return OwaResult::UserExists;
+                    return (OwaResult::UserExists, elapsed_time);
                 }
             }
         }
