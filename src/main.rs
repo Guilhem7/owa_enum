@@ -57,6 +57,12 @@ fn main() {
 
     msg!("Using {} threads", Color::wrap(args.threads_number.to_string().as_str(), Color::YELLOW));
 
+    let filename = args.output.unwrap_or("".to_string());
+    let mut file_writer: Arc<Mutex<Option<File>>> = Arc::new(Mutex::new(None));
+    if ! filename.is_empty() {
+        file_writer = Arc::new(Mutex::new(Some(File::create(filename).expect("Cannot create a file"))));
+    }
+
     let mut target = args.target;
     let mut users: Vec<String> = vec![(&args.user).to_string()];
 
@@ -120,7 +126,7 @@ fn main() {
                                   .build().expect("Help, cannot create a HTTP Client");
     owa_enumerator.set_client(client);
 
-    let buffer = Arc::new(Mutex::new(String::new()));
+    let writer_clone = Arc::clone(&file_writer);
     pool.install(|| {
         users.par_iter().for_each( |username| {
             match owa_enumerator.user_exists(&username, args.password.as_ref()) {
@@ -131,8 +137,11 @@ fn main() {
                          Color::YELLOW,
                          time.as_secs_f64(),
                          Color::RESET);
-                    let mut buf = buffer.lock().unwrap();
-                    buf.push_str(&format!("{}:{}\n", username, args.password));
+                    let mut guard = writer_clone.lock().expect("Error locking file");
+                    if let Some(writer) = guard.as_mut() {
+                        writer.write_all(format!("{}:{}\n", username, args.password).as_bytes()).expect("Could not write to file");
+                        writer.flush().unwrap();
+                    }
                 }
                 (owa::utils::OwaResult::UserExists, time) => {
                     msg!("User {} exists [{}{:.3}{} s]",
@@ -140,9 +149,11 @@ fn main() {
                          Color::YELLOW,
                          time.as_secs_f64(),
                          Color::RESET);
-                    let mut buf = buffer.lock().unwrap();
-                    buf.push_str(&username);
-                    buf.push('\n');
+                    let mut guard = writer_clone.lock().expect("Error locking file");
+                    if let Some(writer) = guard.as_mut() {
+                        writer.write_all(format!("{}\n", username).as_bytes()).expect("Could not write to file");
+                        writer.flush().unwrap();
+                    }
                 }
                 (owa::utils::OwaResult::UserNotFound, time) => err!("User {} does not exists [{}{:.3}{} s]",
                                                                     Color::wrap(&username, Color::BOLD),
@@ -153,12 +164,12 @@ fn main() {
         })
     });
 
-    let final_result = buffer.lock().unwrap();
-    if let Some(output) = args.output {
-        if ! final_result.is_empty(){
-            log!("Writting result to: {}", output);
-            let mut file = File::create(output).expect("Failed to create file");
-            file.write_all(final_result.as_bytes()).expect("Could not write result");
-        }
-    }
+    // let final_result = buffer.lock().unwrap();
+    // if let Some(output) = args.output {
+    //     if ! final_result.is_empty(){
+    //         log!("Writting result to: {}", output);
+    //         let mut file = File::create(output).expect("Failed to create file");
+    //         file.write_all(final_result.as_bytes()).expect("Could not write result");
+    //     }
+    // }
 }
